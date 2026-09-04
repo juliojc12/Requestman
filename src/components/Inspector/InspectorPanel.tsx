@@ -27,6 +27,7 @@ import {
 import { HttpLogEntry, ThemeId } from '../../types';
 import { THEMES } from '../../constants/themes';
 import { ExportService } from '../../services/exportService';
+import { PayloadDiffViewer } from './PayloadDiffViewer';
 
 interface InspectorPanelProps {
   log: HttpLogEntry;
@@ -49,9 +50,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [rawViewMode, setRawViewMode] = useState(false);
-  const [diffLogId, setDiffLogId] = useState<string>(
-    allLogs.find((l) => l.id !== log.id)?.id || ''
-  );
+  const [isExpanded, setIsExpanded] = useState<boolean>(false);
   const [codeLanguage, setCodeLanguage] = useState<'curl' | 'fetch' | 'python'>('curl');
 
   const currentTheme = THEMES[themeId] || THEMES['cyber-dark'];
@@ -75,8 +74,6 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
   const reqBodyInfo = formatJson(log.requestBody);
   const resBodyInfo = formatJson(log.responseBody);
 
-  const diffTargetLog = allLogs.find((l) => l.id === diffLogId);
-
   // Extract query parameters
   const queryParams: Record<string, string> = {};
   try {
@@ -93,7 +90,13 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
   return (
     <div
       id="inspector-panel"
-      className="w-[520px] md:w-[600px] lg:w-[680px] border-l flex flex-col h-full overflow-hidden select-none transition-colors"
+      className={`border-l flex flex-col h-full overflow-hidden select-none transition-all duration-200 ${
+        isExpanded
+          ? 'w-[750px] md:w-[900px] lg:w-[1050px] xl:w-[1200px]'
+          : activeTab === 'diff'
+          ? 'w-[600px] md:w-[720px] lg:w-[840px]'
+          : 'w-[520px] md:w-[600px] lg:w-[680px]'
+      }`}
       style={{
         backgroundColor: currentTheme.bgSidebar,
         borderColor: currentTheme.borderColor,
@@ -142,6 +145,13 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
         </div>
 
         <div className="flex items-center gap-1.5 shrink-0">
+          <button
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="p-1.5 rounded-md hover:bg-[#21262D] text-gray-400 hover:text-white transition-colors"
+            title={isExpanded ? 'Collapse Inspector Width' : 'Expand Inspector Width (Side-by-Side Diff)'}
+          >
+            {isExpanded ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5 text-blue-400" />}
+          </button>
           <button
             onClick={() => onReplay(log)}
             className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs bg-blue-600/20 text-blue-300 border border-blue-500/40 hover:bg-blue-600/30 transition-colors"
@@ -241,13 +251,22 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
           }`}
         >
           <GitCompare className="w-3.5 h-3.5" />
-          <span>Diff</span>
+          <span>Diff Payloads</span>
         </button>
       </div>
 
       {/* Main Tab Content */}
-      <div className="flex-1 overflow-y-auto p-4 text-xs font-mono select-text">
-        {/* TAB 1: OVERVIEW & HEADERS */}
+      {activeTab === 'diff' ? (
+        <div className="flex-1 overflow-hidden flex flex-col">
+          <PayloadDiffViewer
+            currentLog={log}
+            allLogs={allLogs}
+            theme={currentTheme}
+          />
+        </div>
+      ) : (
+        <div className="flex-1 overflow-y-auto p-4 text-xs font-mono select-text">
+          {/* TAB 1: OVERVIEW & HEADERS */}
         {activeTab === 'overview' && (
           <div className="flex flex-col gap-5">
             {/* General Info Card */}
@@ -412,6 +431,14 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
               </div>
               <div className="flex items-center gap-2">
                 <button
+                  onClick={() => setActiveTab('diff')}
+                  className="flex items-center gap-1 px-2 py-0.5 rounded text-[11px] border border-blue-500/40 text-blue-300 bg-blue-500/10 hover:bg-blue-500/20 transition-colors"
+                  title="Compare request payload with another request"
+                >
+                  <GitCompare className="w-3 h-3" />
+                  <span>Diff with...</span>
+                </button>
+                <button
                   onClick={() => setRawViewMode(!rawViewMode)}
                   className="px-2 py-0.5 rounded text-[11px] border border-neutral-700 hover:bg-neutral-800"
                 >
@@ -458,6 +485,14 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                 </span>
               </div>
               <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setActiveTab('diff')}
+                  className="flex items-center gap-1 px-2 py-0.5 rounded text-[11px] border border-blue-500/40 text-blue-300 bg-blue-500/10 hover:bg-blue-500/20 transition-colors"
+                  title="Compare response payload with another request"
+                >
+                  <GitCompare className="w-3 h-3" />
+                  <span>Diff with...</span>
+                </button>
                 <button
                   onClick={() => setRawViewMode(!rawViewMode)}
                   className="px-2 py-0.5 rounded text-[11px] border border-neutral-700 hover:bg-neutral-800"
@@ -631,65 +666,8 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
             </pre>
           </div>
         )}
-
-        {/* TAB 6: DIFF TOOL */}
-        {activeTab === 'diff' && (
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-neutral-400">Compare with:</span>
-              <select
-                value={diffLogId}
-                onChange={(e) => setDiffLogId(e.target.value)}
-                className="bg-black/30 border border-neutral-700 rounded px-2.5 py-1 text-xs text-neutral-200 focus:outline-none focus:border-cyan-500"
-              >
-                {allLogs
-                  .filter((l) => l.id !== log.id)
-                  .map((l) => (
-                    <option key={l.id} value={l.id} className="bg-neutral-900 text-neutral-200">
-                      [{l.method}] {l.status} — {l.path} ({l.durationMs}ms)
-                    </option>
-                  ))}
-              </select>
-            </div>
-
-            {diffTargetLog ? (
-              <div className="grid grid-cols-2 gap-3">
-                <div className="p-3 rounded bg-black/30 border border-neutral-800 flex flex-col gap-2">
-                  <div className="font-bold text-cyan-400 pb-1 border-b border-neutral-800">
-                    Current Request ({log.method} {log.status})
-                  </div>
-                  <div className="text-[10px] space-y-1">
-                    <div><strong>URL:</strong> {log.url}</div>
-                    <div><strong>Duration:</strong> {log.durationMs} ms</div>
-                    <div><strong>Payload size:</strong> {log.responseSize} B</div>
-                    <pre className="mt-2 p-2 bg-black/50 rounded overflow-auto max-h-44 text-[10px]">
-                      {log.responseBody || '[No Body]'}
-                    </pre>
-                  </div>
-                </div>
-
-                <div className="p-3 rounded bg-black/30 border border-neutral-800 flex flex-col gap-2">
-                  <div className="font-bold text-amber-400 pb-1 border-b border-neutral-800">
-                    Compared Request ({diffTargetLog.method} {diffTargetLog.status})
-                  </div>
-                  <div className="text-[10px] space-y-1">
-                    <div><strong>URL:</strong> {diffTargetLog.url}</div>
-                    <div><strong>Duration:</strong> {diffTargetLog.durationMs} ms ({diffTargetLog.durationMs - log.durationMs > 0 ? `+${(diffTargetLog.durationMs - log.durationMs).toFixed(1)}` : (diffTargetLog.durationMs - log.durationMs).toFixed(1)} ms)</div>
-                    <div><strong>Payload size:</strong> {diffTargetLog.responseSize} B</div>
-                    <pre className="mt-2 p-2 bg-black/50 rounded overflow-auto max-h-44 text-[10px]">
-                      {diffTargetLog.responseBody || '[No Body]'}
-                    </pre>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="p-6 text-center text-neutral-500">
-                Please select another request to compare.
-              </div>
-            )}
-          </div>
-        )}
       </div>
-    </div>
+    )}
+  </div>
   );
 };
