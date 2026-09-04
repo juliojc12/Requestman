@@ -1,0 +1,6 @@
+{
+  "name": "HTTP Request Interceptor & Debugger",
+  "description": "Desktop-grade HTTP traffic interceptor and real-time debugging suite with header/payload viewer, SQLite persistence, advanced filters, HAR/JSON exports, and customizable themes.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
